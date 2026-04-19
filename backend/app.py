@@ -25,25 +25,31 @@ app = Flask(
 CORS(app) # Enable CORS for remote collectors
 app.config['JSON_SORT_KEYS'] = False
 
-# Ensure database is initialized on startup with retry logic
+# Ensure database is initialized on startup with retry logic (Non-blocking for Render)
 def startup_db_init():
     import time
-    max_retries = 10
-    retry_delay = 5
-    for i in range(max_retries):
-        try:
-            if init_database():
-                print("Database initialized successfully on startup")
-                return True
-        except Exception as e:
-            print(f"Database initialization attempt {i+1} failed: {e}")
-        
-        print(f"Retrying database initialization in {retry_delay} seconds...")
-        time.sleep(retry_delay)
-    return False
+    import threading
+    
+    def run_init():
+        max_retries = 20
+        retry_delay = 10
+        for i in range(max_retries):
+            try:
+                if init_database():
+                    print("✅ Database initialized successfully")
+                    return
+            except Exception as e:
+                print(f"⚠️  Database initialization attempt {i+1} failed: {e}")
+            
+            print(f"🔄 Retrying database connection in {retry_delay}s... (Attempt {i+1}/{max_retries})")
+            time.sleep(retry_delay)
+        print("❌ Database initialization failed after multiple attempts.")
 
-with app.app_context():
-    startup_db_init()
+    # Run in a separate thread so Flask can bind to $PORT immediately
+    threading.Thread(target=run_init, daemon=True).start()
+
+# Initialize DB in background
+startup_db_init()
 
 
 # --------------------------------

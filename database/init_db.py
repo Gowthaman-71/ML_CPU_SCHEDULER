@@ -16,11 +16,17 @@ def init_database():
     
     # Try connecting without database first to create it
     try:
-        conn = mysql.connector.connect(
-            host=os.environ.get('DB_HOST', 'localhost'),
-            user=os.environ.get('DB_USER', 'root'),
-            password=os.environ.get('DB_PASSWORD', '2006')
-        )
+        ssl_mode = os.environ.get('DB_SSL', 'false').lower() == 'true'
+        config = {
+            'host': os.environ.get('DB_HOST', 'localhost'),
+            'user': os.environ.get('DB_USER', 'root'),
+            'password': os.environ.get('DB_PASSWORD', '2006'),
+            'connect_timeout': 10
+        }
+        if ssl_mode:
+            config['ssl_disabled'] = False
+
+        conn = mysql.connector.connect(**config)
         cursor = conn.cursor()
         db_name = os.environ.get('DB_NAME', 'cpu_scheduler')
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
