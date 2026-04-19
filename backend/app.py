@@ -32,6 +32,10 @@ def startup_db_init():
     import psutil
     import traceback
     
+    # Detect DB type for SQL placeholder syntax
+    db_type = os.environ.get('DB_TYPE', 'sqlite').lower()
+    q_mark = "?" if db_type == 'sqlite' else "%s"
+
     def run_internal_collector():
         """Automatically collects data from the server itself."""
         print("🚀 [COLLECTOR] Background collector thread started", flush=True)
@@ -47,10 +51,10 @@ def startup_db_init():
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT id FROM devices WHERE device_id = %s", (device_id,))
+                    cursor.execute(f"SELECT id FROM devices WHERE device_id = {q_mark}", (device_id,))
                     if not cursor.fetchone():
                         cursor.execute(
-                            "INSERT INTO devices (device_id, device_name, device_type, os_info) VALUES (%s, %s, %s, %s)",
+                            f"INSERT INTO devices (device_id, device_name, device_type, os_info) VALUES ({q_mark}, {q_mark}, {q_mark}, {q_mark})",
                             (device_id, device_name, "Internal", f"{os.name} (Server)")
                         )
                     conn.commit()
@@ -153,22 +157,26 @@ def register_device():
     
     cursor = conn.cursor()
     
+    # Detect DB type for SQL placeholder syntax
+    db_type = os.environ.get('DB_TYPE', 'sqlite').lower()
+    q_mark = "?" if db_type == 'sqlite' else "%s"
+
     try:
         # Check if device already exists
-        cursor.execute("SELECT id FROM devices WHERE device_id = %s", (device_id,))
+        cursor.execute(f"SELECT id FROM devices WHERE device_id = {q_mark}", (device_id,))
         existing = cursor.fetchone()
         
         if existing:
             # Update last_seen
             cursor.execute(
-                "UPDATE devices SET last_seen = %s, ip_address = %s, is_active = TRUE WHERE device_id = %s",
+                f"UPDATE devices SET last_seen = {q_mark}, ip_address = {q_mark}, is_active = TRUE WHERE device_id = {q_mark}",
                 (datetime.now(), ip_address, device_id)
             )
         else:
             # Insert new device
             cursor.execute(
-                """INSERT INTO devices (device_id, device_name, ip_address, device_type, os_info, last_seen)
-                VALUES (%s, %s, %s, %s, %s, %s)""",
+                f"""INSERT INTO devices (device_id, device_name, ip_address, device_type, os_info, last_seen)
+                VALUES ({q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark})""",
                 (device_id, device_name, ip_address, device_type, os_info, datetime.now())
             )
         
@@ -180,8 +188,8 @@ def register_device():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        cursor.close()
-        conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
         return jsonify({"error": str(e)}), 500
 
 
@@ -204,19 +212,23 @@ def process_data_submission(data):
     
     cursor = conn.cursor()
     
+    # Detect DB type for SQL placeholder syntax
+    db_type = os.environ.get('DB_TYPE', 'sqlite').lower()
+    q_mark = "?" if db_type == 'sqlite' else "%s"
+
     try:
         # Update device status with latest system metrics
         cursor.execute(
-            "UPDATE devices SET cpu_load = %s, mem_load = %s, last_seen = %s WHERE device_id = %s",
+            f"UPDATE devices SET cpu_load = {q_mark}, mem_load = {q_mark}, last_seen = {q_mark} WHERE device_id = {q_mark}",
             (system_cpu, system_mem, datetime.now(), device_id)
         )
         
         inserted_count = 0
         for process in processes:
             cursor.execute(
-                """INSERT INTO process_data 
+                f"""INSERT INTO process_data 
                 (device_id, pid, process_name, cpu_usage, memory_usage, burst_time, priority, arrival_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                VALUES ({q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark}, {q_mark})""",
                 (
                     device_id,
                     process.get('pid'),
