@@ -11,6 +11,7 @@ def get_db_connection():
             'user': os.environ.get('DB_USER', 'root'),
             'password': os.environ.get('DB_PASSWORD', '2006'),
             'database': os.environ.get('DB_NAME', 'cpu_scheduler'),
+            'port': int(os.environ.get('DB_PORT', 3306)),
             'connect_timeout': 10
         }
         

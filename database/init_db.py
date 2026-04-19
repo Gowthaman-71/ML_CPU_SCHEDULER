@@ -21,6 +21,7 @@ def init_database():
             'host': os.environ.get('DB_HOST', 'localhost'),
             'user': os.environ.get('DB_USER', 'root'),
             'password': os.environ.get('DB_PASSWORD', '2006'),
+            'port': int(os.environ.get('DB_PORT', 3306)),
             'connect_timeout': 10
         }
         if ssl_mode:
