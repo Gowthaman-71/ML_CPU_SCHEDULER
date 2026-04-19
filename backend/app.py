@@ -29,7 +29,65 @@ app.config['JSON_SORT_KEYS'] = False
 def startup_db_init():
     import time
     import threading
+    import psutil
     
+    def run_internal_collector():
+        """Automatically collects data from the server itself."""
+        device_id = "server-internal"
+        device_name = "System-Self-Monitor"
+        
+        # Wait a bit for DB to be ready
+        time.sleep(5)
+        
+        while True:
+            try:
+                # 1. Register self
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    # Check if exists (MySQL/SQLite compatible check)
+                    cursor.execute("SELECT id FROM devices WHERE device_id = %s", (device_id,))
+                    if not cursor.fetchone():
+                        cursor.execute(
+                            "INSERT INTO devices (device_id, device_name, device_type, os_info) VALUES (%s, %s, %s, %s)",
+                            (device_id, device_name, "Internal", f"{os.name} (Server)")
+                        )
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+
+                # 2. Collect and Submit
+                processes = []
+                for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+                    try:
+                        pinfo = proc.info
+                        if pinfo['cpu_percent'] > 0 or pinfo['memory_percent'] > 0:
+                            processes.append({
+                                'pid': pinfo['pid'],
+                                'process_name': pinfo['name'],
+                                'cpu_usage': pinfo['cpu_percent'],
+                                'memory_usage': pinfo['memory_percent'],
+                                'burst_time': pinfo['cpu_percent'] if pinfo['cpu_percent'] > 0 else 0.5,
+                                'priority': 0
+                            })
+                    except: continue
+                
+                # Internal POST to own API
+                payload = {
+                    'device_id': device_id,
+                    'processes': processes[:20], # Top 20
+                    'system_cpu': psutil.cpu_percent(),
+                    'system_mem': psutil.virtual_memory().percent
+                }
+                
+                with app.test_client() as client:
+                    client.post('/api/submit-process-data', json=payload)
+                    
+            except Exception as e:
+                print(f"Internal collector error: {e}")
+            
+            time.sleep(5)
+
     def run_init():
         max_retries = 20
         retry_delay = 10
@@ -37,6 +95,8 @@ def startup_db_init():
             try:
                 if init_database():
                     print("✅ Database initialized successfully")
+                    # Start internal collector once DB is ready
+                    threading.Thread(target=run_internal_collector, daemon=True).start()
                     return
             except Exception as e:
                 print(f"⚠️  Database initialization attempt {i+1} failed: {e}")
@@ -48,7 +108,7 @@ def startup_db_init():
     # Run in a separate thread so Flask can bind to $PORT immediately
     threading.Thread(target=run_init, daemon=True).start()
 
-# Initialize DB in background
+# Initialize DB and Collector in background
 startup_db_init()
 
 
