@@ -72,7 +72,7 @@ def startup_db_init():
                             })
                     except: continue
                 
-                # Internal POST to own API
+                # Internal submission (Directly call helper instead of test_client)
                 payload = {
                     'device_id': device_id,
                     'processes': processes[:20], # Top 20
@@ -80,8 +80,8 @@ def startup_db_init():
                     'system_mem': psutil.virtual_memory().percent
                 }
                 
-                with app.test_client() as client:
-                    client.post('/api/submit-process-data', json=payload)
+                process_data_submission(payload)
+                print(f"📡 Internal Collector: Submitted {len(processes[:20])} processes")
                     
             except Exception as e:
                 print(f"Internal collector error: {e}")
@@ -173,20 +173,19 @@ def register_device():
 # ---------------------------
 # API: Receive Data from Remote Device
 # ---------------------------
-@app.route("/api/submit-process-data", methods=['POST'])
-def submit_process_data():
-    data = request.get_json()
+def process_data_submission(data):
+    """Internal helper to process data from both API and Internal Collector."""
     device_id = data.get('device_id')
     processes = data.get('processes', [])
     system_cpu = data.get('system_cpu', 0)
     system_mem = data.get('system_mem', 0)
     
     if not device_id:
-        return jsonify({"error": "device_id is required"}), 400
+        return {"error": "device_id is required"}, 400
     
     conn = get_db_connection()
     if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
+        return {"error": "Database connection failed"}, 500
     
     cursor = conn.cursor()
     
@@ -219,14 +218,19 @@ def submit_process_data():
         conn.commit()
         cursor.close()
         conn.close()
-        
-        return jsonify({"success": True, "inserted": inserted_count})
+        return {"success": True, "inserted": inserted_count}, 200
     except Exception as e:
         import traceback
         traceback.print_exc()
-        cursor.close()
-        conn.close()
-        return jsonify({"error": str(e)}), 500
+        if cursor: cursor.close()
+        if conn: conn.close()
+        return {"error": str(e)}, 500
+
+@app.route("/api/submit-process-data", methods=['POST'])
+def submit_process_data():
+    data = request.get_json()
+    result, status_code = process_data_submission(data)
+    return jsonify(result), status_code
 
 
 # ---------------------------
