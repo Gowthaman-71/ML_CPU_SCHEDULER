@@ -30,14 +30,16 @@ def startup_db_init():
     import time
     import threading
     import psutil
+    import traceback
     
     def run_internal_collector():
         """Automatically collects data from the server itself."""
+        print("🚀 [COLLECTOR] Background collector thread started", flush=True)
         device_id = "server-internal"
         device_name = "System-Self-Monitor"
         
-        # Wait a bit for DB to be ready
-        time.sleep(5)
+        # Wait for DB to be initialized
+        time.sleep(10)
         
         while True:
             try:
@@ -45,7 +47,6 @@ def startup_db_init():
                 conn = get_db_connection()
                 if conn:
                     cursor = conn.cursor()
-                    # Check if exists (MySQL/SQLite compatible check)
                     cursor.execute("SELECT id FROM devices WHERE device_id = %s", (device_id,))
                     if not cursor.fetchone():
                         cursor.execute(
@@ -55,24 +56,29 @@ def startup_db_init():
                     conn.commit()
                     cursor.close()
                     conn.close()
+                else:
+                    print("⚠️  [COLLECTOR] Database connection failed in collector loop", flush=True)
 
                 # 2. Collect and Submit
                 processes = []
-                for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
-                    try:
-                        pinfo = proc.info
-                        if pinfo['cpu_percent'] > 0 or pinfo['memory_percent'] > 0:
+                try:
+                    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+                        try:
+                            pinfo = proc.info
                             processes.append({
                                 'pid': pinfo['pid'],
-                                'process_name': pinfo['name'],
-                                'cpu_usage': pinfo['cpu_percent'],
-                                'memory_usage': pinfo['memory_percent'],
-                                'burst_time': pinfo['cpu_percent'] if pinfo['cpu_percent'] > 0 else 0.5,
+                                'process_name': pinfo['name'] or "Unknown",
+                                'cpu_usage': pinfo['cpu_percent'] or 0,
+                                'memory_usage': pinfo['memory_percent'] or 0,
+                                'burst_time': pinfo['cpu_percent'] if (pinfo['cpu_percent'] and pinfo['cpu_percent'] > 0) else 0.5,
                                 'priority': 0
                             })
-                    except: continue
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+                except Exception as e:
+                    print(f"⚠️  [COLLECTOR] Error iterating processes: {e}", flush=True)
                 
-                # Internal submission (Directly call helper instead of test_client)
+                # Internal submission
                 payload = {
                     'device_id': device_id,
                     'processes': processes[:20], # Top 20
@@ -80,30 +86,39 @@ def startup_db_init():
                     'system_mem': psutil.virtual_memory().percent
                 }
                 
-                process_data_submission(payload)
-                print(f"📡 Internal Collector: Submitted {len(processes[:20])} processes")
+                res, code = process_data_submission(payload)
+                if code == 200:
+                    print(f"📡 [COLLECTOR] Successfully submitted {len(processes[:20])} processes", flush=True)
+                else:
+                    print(f"❌ [COLLECTOR] Submission failed: {res}", flush=True)
                     
             except Exception as e:
-                print(f"Internal collector error: {e}")
+                print(f"❌ [COLLECTOR] Fatal loop error: {e}", flush=True)
+                traceback.print_exc()
             
-            time.sleep(5)
+            time.sleep(10)
 
     def run_init():
-        max_retries = 20
+        print("🛠️ [INIT] Database initialization thread started", flush=True)
+        max_retries = 30
         retry_delay = 10
         for i in range(max_retries):
             try:
+                print(f"🛠️ [INIT] Attempting database initialization (Attempt {i+1}/{max_retries})...", flush=True)
                 if init_database():
-                    print("✅ Database initialized successfully")
+                    print("✅ [INIT] Database initialized successfully", flush=True)
                     # Start internal collector once DB is ready
                     threading.Thread(target=run_internal_collector, daemon=True).start()
                     return
+                else:
+                    print(f"⚠️  [INIT] init_database() returned False", flush=True)
             except Exception as e:
-                print(f"⚠️  Database initialization attempt {i+1} failed: {e}")
+                print(f"❌ [INIT] Initialization attempt {i+1} crashed: {e}", flush=True)
+                traceback.print_exc()
             
-            print(f"🔄 Retrying database connection in {retry_delay}s... (Attempt {i+1}/{max_retries})")
+            print(f"🔄 [INIT] Retrying in {retry_delay}s...", flush=True)
             time.sleep(retry_delay)
-        print("❌ Database initialization failed after multiple attempts.")
+        print("🛑 [INIT] Database initialization failed after all attempts.", flush=True)
 
     # Run in a separate thread so Flask can bind to $PORT immediately
     threading.Thread(target=run_init, daemon=True).start()
