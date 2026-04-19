@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML CPU Scheduler | Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <i class="fas fa-microchip"></i>
+            <span>ML CPU Scheduler</span>
+        </div>
+        <nav>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-list"></i>
+                        <span>Process List</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-brain"></i>
+                        <span>ML Model</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-server"></i>
+                        <span>Nodes</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-history"></i>
+                        <span>Analytics</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-cog"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="sidebar-nodes" style="margin-top: 2rem; flex: 1; overflow-y: auto;">
+            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem; padding-left: 10px; font-weight: 700; text-transform: uppercase;">Connected Nodes</p>
+            <div id="deviceList"></div>
+        </div>
+        
+        <div class="theme-toggle" onclick="toggleTheme()">
+            <i class="fas fa-moon" id="themeIcon"></i>
+            <span id="themeText">Dark Mode</span>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div class="header-title">
+                <h1 id="viewTitle">Performance Overview</h1>
+                <p id="viewSubtitle">Intelligent CPU scheduling monitoring</p>
+            </div>
+            <div class="live-status">
+                <div class="live-dot"></div>
+                <span id="syncStatus">LIVE SYNC ACTIVE</span>
+                <span style="color: var(--text-secondary); margin-left: 8px;">•</span>
+                <span id="lastUpdated" style="color: var(--text-secondary); margin-left: 8px;">-</span>
+            </div>
+        </header>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="page-view active">
+            <!-- Stats Grid -->
+            <div class="dashboard-grid">
+                <div class="stat-card">
+                    <h3>Total Processes</h3>
+                    <div id="totalProcesses" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>FCFS Wait Avg</h3>
+                    <div class="stat-value"><span id="fcfsAvg">0</span><small style="font-size: 0.8rem;"> ms</small></div>
+                </div>
+                <div class="stat-card">
+                    <h3>ML Wait Avg</h3>
+                    <div class="stat-value" style="color: var(--accent-primary);"><span id="mlAvg">0</span><small style="font-size: 0.8rem;"> ms</small></div>
+                </div>
+                <div class="stat-card">
+                    <h3>Efficiency Gain</h3>
+                    <div class="stat-value" style="color: var(--accent-success);"><span id="improvement">0%</span></div>
+                </div>
+            </div>
+
+            <!-- Gantt Chart Row -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Scheduling Timeline</h3>
+                </div>
+                <div id="ganttContainer">
+                    <p id="ganttPlaceholder">Processing...</p>
+                </div>
+            </div>
+
+            <!-- Analytics Row (Simplified for Dashboard) -->
+            <div class="content-row" style="flex: 1.5;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Waiting Time Analysis</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="waitingChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Algorithm Efficiency</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="algoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Process List View -->
+        <div id="process-list-view" class="page-view">
+            <div class="card" style="flex: 1;">
+                <div class="card-header">
+                    <h3>Live Process Monitor</h3>
+                    <div class="header-actions" style="display: flex; gap: 10px;">
+                        <input type="text" id="processSearch" placeholder="Search PID..." class="search-input" oninput="filterProcesses()">
+                        <button class="btn btn-sm btn-primary" onclick="exportProcessesToCSV()">
+                            <i class="fas fa-download"></i> Export CSV
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="full-table">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>Burst Time (ms)</th>
+                                <th>FCFS Wait (ms)</th>
+                                <th>ML Prediction (ms)</th>
+                                <th>Target Node</th>
+                                <th>Arrival Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fullProcessTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ML Model View -->
+        <div id="ml-model-view" class="page-view">
+            <div class="content-row">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Model Performance Metrics</h3>
+                        <button id="retrainBtnMain" class="btn btn-primary" onclick="retrainModel()">
+                            <i class="fas fa-sync"></i> Retrain Model
+                        </button>
+                    </div>
+                    <div class="ml-metrics-grid">
+                        <div class="metric-box">
+                            <span class="label">Accuracy Score</span>
+                            <span id="mlAccuracyScore" class="value">0%</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="label">Total Training Samples</span>
+                            <span id="mlTotalSamples" class="value">0</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="label">Mean Absolute Error</span>
+                            <span id="mlMae" class="value">0.00</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="label">Model Status</span>
+                            <span class="status-badge online">Active</span>
+                        </div>
+                    </div>
+                    <div class="chart-container" style="margin-top: 2rem;">
+                        <canvas id="trainingHistoryChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Confidence Analysis</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="confidenceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nodes View -->
+        <div id="nodes-view" class="page-view">
+            <div class="content-row">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Cluster Nodes Status</h3>
+                    </div>
+                    <div id="fullDeviceList" class="device-grid"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Resource Distribution</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="resourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics View -->
+        <div id="analytics-view" class="page-view">
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <div class="card-header">
+                    <h3>Historical Performance Trends</h3>
+                </div>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="historicalTrendsChart"></canvas>
+                </div>
+            </div>
+            <div class="content-row">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Algorithm Comparison (Detailed)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="detailedAlgoChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>System Health Index</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="throughputChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="page-view">
+            <div class="card" style="max-width: 600px;">
+                <div class="card-header">
+                    <h3>System Settings</h3>
+                </div>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label>Data Collection Interval (seconds)</label>
+                        <input type="number" value="5" min="1" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>ML Model Threshold</label>
+                        <input type="range" min="0" max="100" value="85" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Auto-Retrain Model</label>
+                        <input type="checkbox" checked>
+                    </div>
+                    <button class="btn btn-primary">Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Common System Load (Always Visible) -->
+        <div class="system-load-row" style="margin-top: auto;">
+            <div class="card" style="padding: 0.5rem 1rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 600;">
+                    <span>CPU LOAD</span>
+                    <span id="cpuLoadText">0%</span>
+                </div>
+                <div class="progress-container">
+                    <div id="cpuLoadBar" class="progress-bar" style="background: var(--accent-primary);"></div>
+                </div>
+            </div>
+            <div class="card" style="padding: 0.5rem 1rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 600;">
+                    <span>MEM LOAD</span>
+                    <span id="memLoadText">0%</span>
+                </div>
+                <div class="progress-container">
+                    <div id="memLoadBar" class="progress-bar" style="background: var(--accent-secondary);"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('themeIcon');
+            const text = document.getElementById('themeText');
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+                icon.className = 'fas fa-moon';
+                text.innerText = 'Dark Mode';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                icon.className = 'fas fa-sun';
+                text.innerText = 'Light Mode';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+            document.getElementById('themeIcon').className = 'fas fa-sun';
+            document.getElementById('themeText').innerText = 'Light Mode';
+        }
+    </script>
+</body>
+</html>

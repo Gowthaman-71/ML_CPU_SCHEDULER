@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: scheduler_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 2006
+      MYSQL_DATABASE: cpu_scheduler
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p2006"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: scheduler_app
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: 2006
+      DB_NAME: cpu_scheduler
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
